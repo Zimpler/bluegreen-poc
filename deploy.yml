@@ -1,0 +1,56 @@
+- name: a play that runs entirely on the ansible host
+  hosts: localhost
+  connection: local
+  vars:
+    ports:
+      green: 8001
+      blue: 8002
+    color_chain:
+      blue: green
+      green: blue
+    # This is just a tmp thing for docker, later just localhost
+    deploy_host:
+      bluegreen.dev
+
+  tasks:
+  - name: lookup current color
+    register: color_lookup
+    shell: cat proxy/conf.d/proxy.conf | grep -oE 'ACTIVE_COLOR=(blue|green)' | grep -oE '(blue|green)' || echo 'green'
+
+  - name: set current color
+    set_fact:
+      current_color: "{{color_lookup.stdout}}"
+
+  - name: pick next color
+    set_fact:
+      next_color: "{{color_chain[current_color]}}"
+
+  - name: pick new port
+    set_fact:
+      next_port: "{{ports[next_color]}}"
+
+  - name: Debug
+    debug: msg="current {{current_color}}, next {{next_color}}"
+
+  - name: Take down next color
+    shell: "docker-compose stop {{next_color}}"
+
+  - name: Take up new color
+    shell: "docker-compose up --build -d {{next_color}}"
+
+  - name: Wait until next color comes up
+    uri:
+      url: "http://{{deploy_host}}:{{ next_port }}/status"
+    retries: 15
+    delay: 1
+
+  - set_fact:
+      active_color: "{{next_color}}"
+
+  - name: update proxy config
+    template:
+      src: "./proxy.conf"
+      dest: "./proxy/conf.d/proxy.conf"
+
+  - name: reload nginx
+    shell: docker-compose exec proxy service nginx reload
