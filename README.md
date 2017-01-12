@@ -9,19 +9,33 @@ Dependencies:
 - docker
 - ab (if you want to load test)
 
-To run benchmark:
+Start blue & green (only because docker is annoying and needs network
+access)
 
 ```
-ab -l -n 100000 http://bluegreen.dev:8080/
+docker-compose up -d blue green
 ```
 
-Then run a bunch of deploy:
+Start the proxy
+
+```
+docker-compose up proxy
+```
+
+Do a deploy
 
 ```
 ansible-playbook deploy.yml
 ```
 
-Making sure the deployed version alternates between blue and green.
+Start benchmark:
+
+```
+ab -l -n 100000 http://bluegreen.dev:8080/
+```
+
+Then run a bunch of deploys, making sure the deployed version
+alternates between blue and green.
 
 Result:
 
